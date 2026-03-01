@@ -1,0 +1,234 @@
+10
+20
+30
+40
+50
+60
+70
+let originalData = [];
+let chart;
+
+document.getElementById("fileInput").addEventListener("change", function(e){
+    const reader = new FileReader();
+    reader.onload = function(){
+        originalData = reader.result
+            .split(/[\r\n,]+/)
+            .map(Number)
+            .filter(n => !isNaN(n));
+        updateDashboard();
+    };
+    reader.readAsText(e.target.files[0]);
+});
+
+document.getElementById("filterInput").addEventListener("input", updateDashboard);
+document.getElementById("chartType").addEventListener("change", updateDashboard);
+
+function updateDashboard(){
+    if(originalData.length === 0) return;
+
+    const filterValue = Number(document.getElementById("filterInput").value);
+    let data = originalData.filter(n => !filterValue || n > filterValue);
+
+    if(data.length === 0) return;
+
+    const count = data.length;
+    const avg = data.reduce((a,b)=>a+b,0)/count;
+    const max = Math.max(...data);
+    const min = Math.min(...data);
+
+    const sorted = [...data].sort((a,b)=>a-b);
+    const median = sorted.length%2===0 ?
+        (sorted[count/2-1]+sorted[count/2])/2 :
+        sorted[Math.floor(count/2)];
+
+    const variance = data.reduce((a,b)=>a+(b-avg)**2,0)/count;
+    const std = Math.sqrt(variance);
+
+    document.getElementById("count").innerText = count;
+    document.getElementById("avg").innerText = avg.toFixed(2);
+    document.getElementById("max").innerText = max;
+    document.getElementById("min").innerText = min;
+    document.getElementById("median").innerText = median;
+    document.getElementById("std").innerText = std.toFixed(2);
+
+    generateInsight(data, avg, std);
+    renderChart(data);
+}
+
+function renderChart(data){
+    const ctx = document.getElementById("chartCanvas");
+    if(chart) chart.destroy();
+
+    const type = document.getElementById("chartType").value;
+
+    if(type === "histogram"){
+        const bins = 5;
+        const min = Math.min(...data);
+        const max = Math.max(...data);
+        const binSize = Math.ceil((max-min)/bins);
+        let labels = [];
+        let counts = new Array(bins).fill(0);
+
+        for(let i=0;i<bins;i++){
+            let start = min + i*binSize;
+            let end = start+binSize-1;
+            labels.push(`${start}-${end}`);
+        }
+
+        data.forEach(v=>{
+            let index = Math.floor((v-min)/binSize);
+            if(index>=bins) index=bins-1;
+            counts[index]++;
+        });
+
+        chart = new Chart(ctx,{
+            type:"bar",
+            data:{labels:labels,datasets:[{data:counts}]}
+        });
+
+    }else{
+        chart = new Chart(ctx,{
+            type:type,
+            data:{
+                labels:data.map((_,i)=>"Data "+(i+1)),
+                datasets:[{data:data}]
+            }
+        });
+    }
+}
+
+function generateInsight(data, avg, std){
+    let text="";
+    if(std > avg*0.3){
+        text+="ข้อมูลมีการกระจายตัวสูง. ";
+    }else{
+        text+="ข้อมูลมีความสม่ำเสมอ. ";
+    }
+
+    if(avg > (Math.max(...data)+Math.min(...data))/2){
+        text+="แนวโน้มข้อมูลอยู่ด้านบน.";
+    }else{
+        text+="แนวโน้มข้อมูลอยู่ด้านล่าง.";
+    }
+
+    document.getElementById("insightBox").innerText=text;
+}
+
+async function exportPDF(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.text("Data Analytics Report",10,10);
+    doc.text("Count: "+document.getElementById("count").innerText,10,20);
+    doc.text("Average: "+document.getElementById("avg").innerText,10,30);
+    doc.text("Max: "+document.getElementById("max").innerText,10,40);
+    doc.text("Min: "+document.getElementById("min").innerText,10,50);
+    doc.text("Median: "+document.getElementById("median").innerText,10,60);
+    doc.text("Std Dev: "+document.getElementById("std").innerText,10,70);
+    doc.save("report.pdf");
+}
+body{
+    margin:0;
+    font-family:Arial, sans-serif;
+    background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+    color:white;
+    text-align:center;
+}
+
+.container{
+    width:95%;
+    max-width:1200px;
+    margin:auto;
+    padding:20px;
+}
+
+.controls{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:10px;
+    margin-bottom:20px;
+}
+
+input,select,button{
+    padding:8px 12px;
+    border-radius:8px;
+    border:none;
+}
+
+button{
+    cursor:pointer;
+    background:#00c6ff;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:15px;
+    margin-bottom:30px;
+}
+
+.card{
+    background:rgba(255,255,255,0.1);
+    padding:15px;
+    border-radius:15px;
+}
+
+.insight{
+    margin:20px 0;
+    padding:15px;
+    background:rgba(255,255,255,0.1);
+    border-radius:12px;
+}
+
+canvas{
+    background:white;
+    border-radius:15px;
+    padding:10px;
+}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Advanced Data Analytics Dashboard</title>
+
+<link rel="stylesheet" href="style.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+
+<div class="container">
+<h1>ระบบวิเคราะห์ข้อมูล</h1>
+
+<div class="controls">
+<input type="file" id="fileInput">
+<input type="number" id="filterInput" placeholder="Filter มากกว่า...">
+<select id="chartType">
+<option value="bar">Bar</option>
+<option value="line">Line</option>
+<option value="pie">Pie</option>
+<option value="histogram">Histogram</option>
+</select>
+<button onclick="exportPDF()">Export PDF</button>
+</div>
+
+<div class="stats">
+<div class="card">จำนวนข้อมูล<br><span id="count">0</span></div>
+<div class="card">ค่าเฉลี่ย<br><span id="avg">0</span></div>
+<div class="card">ค่าสูงสุด<br><span id="max">0</span></div>
+<div class="card">ค่าต่ำสุด<br><span id="min">0</span></div>
+<div class="card">มัธยฐาน<br><span id="median">0</span></div>
+<div class="card">Std Dev<br><span id="std">0</span></div>
+</div>
+
+<div id="insightBox" class="insight">Insight จะแสดงที่นี่</div>
+
+<canvas id="chartCanvas"></canvas>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
